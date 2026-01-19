@@ -419,7 +419,7 @@ def main():
             # 每10秒显示统计
             if int(time.time()) % 10 == 0:
                 stats = server.get_stats()
-                print(f 状态: {stats['connected_clients']} 客户端 | "
+                print(f"\r[状态] {stats['connected_clients']} 客户端 | "
                       f"{stats['total_games']} 游戏 | "
                       f"{stats['total_positions']} 位置", end='')
     except KeyboardInterrupt:
