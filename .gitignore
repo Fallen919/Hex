@@ -1,0 +1,32 @@
+# Python编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 训练数据（不要提交到Git）
+training_data/*.npz
+training_data/*.npy
+training_logs/*.log
+training_logs/*.txt
+
+# 模型检查点（太大，不要提交）
+models/*.pth
+checkpoints/*.pth
+*.pth
+
+# 临时文件
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试文件
+test_*.py
+*_test.py

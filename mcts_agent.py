@@ -327,6 +327,9 @@ class MCTSAgent:
             if iterations % 100 == 0 and time.time() - start_time >= think_time:
                 break
 
+        # ✓ 保存root节点供外部访问（用于提取策略分布）
+        self.root = root
+        
         best_child = root.best_child()
 
         elapsed = time.time() - start_time
@@ -372,6 +375,9 @@ class RAVEAgent(MCTSAgent):
             if iterations % 100 == 0 and time.time() - start_time >= think_time:
                 break
 
+        # ✓ 保存root节点供外部访问（用于提取策略分布）
+        self.root = root
+        
         best_child = root.best_child()
 
         elapsed = time.time() - start_time

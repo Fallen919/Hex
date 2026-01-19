@@ -7,6 +7,14 @@ from tkinter import *
 from tkinter import ttk, messagebox, filedialog
 import numpy as np
 from copy import deepcopy
+import socket
+import pickle
+import time
+import subprocess
+import sys
+import threading
+from pathlib import Path
+import json
 
 # 导入模块化的组件
 from game_core import GameState as gamestate
@@ -632,112 +640,442 @@ class Gui:
                 messagebox.showerror("错误", f"保存失败: {str(e)}")
 
     def train_cnn_model(self):
-        """训练CNN模型"""
-        import threading
-
+        """使用TCP分布式系统训练CNN模型"""
         try:
             num_games = int(self.cnn_games_entry.get())
-            learning_rate = float(self.cnn_lr_entry.get())
-            batch_size = int(self.cnn_batch_entry.get())
-            epochs = int(self.cnn_epoch_entry.get())
         except ValueError:
-            messagebox.showerror("错误", "请输入有效的训练参数")
+            messagebox.showerror("错误", "请输入有效的训练局数")
             return
 
-        if num_games <= 0 or learning_rate <= 0 or batch_size <= 0 or epochs <= 0:
-            messagebox.showerror("错误", "训练参数必须大于0")
+        if num_games <= 0:
+            messagebox.showerror("错误", "训练局数必须大于0")
             return
 
-        save_path = filedialog.asksaveasfilename(
-            defaultextension=".pth",
-            filetypes=[("PyTorch模型", "*.pth"), ("所有文件", "*.*")],
-            title="保存训练后的模型"
+        # 确认开始训练
+        response = messagebox.askyesno(
+            "开始TCP训练", 
+            f"将启动TCP分布式训练系统:\n\n"
+            f"• 训练局数: {num_games}\n"
+            f"• 客户端数: 2\n"
+            f"• 思考时间: 1.5秒/步\n\n"
+            f"训练将在后台进行，可以在GUI中观战\n"
+            f"数据保存至: training_data/\n"
+            f"模型保存至: models/\n\n"
+            f"确定开始训练？"
         )
-
-        if not save_path:
+        
+        if not response:
             return
-
-        # 初始化或使用现有的CNN代理
-        if self.cnn_agent is None:
-            self.cnn_agent = CNNAgent(board_size=self.game.size)
 
         # 禁用训练按钮
         self.train_model_btn.config(state=DISABLED)
         self.cnn_progress_var.set(0)
 
-        self.add_cnn_log("=" * 40)
-        self.add_cnn_log("开始训练")
+        self.add_cnn_log("=" * 60)
+        self.add_cnn_log("🚀 启动TCP分布式训练系统")
+        self.add_cnn_log("=" * 60)
         self.add_cnn_log(f"训练局数: {num_games}")
-        self.add_cnn_log(f"学习率: {learning_rate}")
-        self.add_cnn_log(f"批次大小: {batch_size}")
-        self.add_cnn_log(f"训练轮数: {epochs}")
-        self.add_cnn_log("=" * 40)
+        self.add_cnn_log(f"客户端数: 2 (共 {num_games * 2} 局)")
+        self.add_cnn_log(f"模式: 后台训练 + GUI观战")
+        self.add_cnn_log("=" * 60)
 
-        def update_progress(current, total, info=""):
-            """更新进度回调"""
-            progress = int((current / total) * 100)
-            self.cnn_progress_var.set(progress)
-            self.cnn_progress_label.config(
-                text=f"训练进度: {current}/{total} ({progress}%)\n{info}"
-            )
-            self.root.update()
-
-        def train_thread():
+        # TCP训练进程管理
+        self.tcp_processes = []
+        self.tcp_bridge = None
+        self.tcp_running = True
+        
+        def start_tcp_training():
             try:
-                # 训练模型
-                if hasattr(self.cnn_agent, 'train_model'):
-                    self.cnn_agent.train_model(
-                        num_games=num_games,
-                        save_path=save_path,
-                        learning_rate=learning_rate,
-                        batch_size=batch_size,
-                        epochs=epochs,
-                        progress_callback=update_progress
+                # 0. 清理可能占用端口的旧进程
+                self.add_cnn_log("🔍 检查端口占用...")
+                try:
+                    import subprocess as sp
+                    # 查找占用9999端口的进程
+                    result = sp.run(
+                        ['netstat', '-ano'],
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'
                     )
+                    
+                    pids_to_kill = set()
+                    for line in result.stdout.split('\n'):
+                        if ':9999' in line and 'LISTENING' in line:
+                            parts = line.split()
+                            if parts:
+                                try:
+                                    pid = int(parts[-1])
+                                    pids_to_kill.add(pid)
+                                except:
+                                    pass
+                    
+                    if pids_to_kill:
+                        self.add_cnn_log(f"⚠ 发现{len(pids_to_kill)}个占用9999端口的进程，正在清理...")
+                        for pid in pids_to_kill:
+                            try:
+                                sp.run(['taskkill', '/F', '/PID', str(pid)], 
+                                      capture_output=True, timeout=2)
+                            except:
+                                pass
+                        time.sleep(1)
+                        self.add_cnn_log("✓ 端口清理完成")
+                    else:
+                        self.add_cnn_log("✓ 端口未被占用")
+                except Exception as e:
+                    self.add_cnn_log(f"⚠ 端口检查失败: {e}")
+                
+                # 1. 启动训练服务器
+                self.add_cnn_log("📡 启动训练服务器...")
+                server_cmd = [
+                    sys.executable,
+                    str(Path(__file__).parent / 'tcp_training_manager.py'),
+                    '--mode', 'online',
+                    '--port', '9999'
+                ]
+                
+                server_process = subprocess.Popen(
+                    server_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,  # 合并stderr到stdout
+                    text=True,
+                    encoding='utf-8',  # 指定UTF-8编码
+                    errors='replace',  # 遇到无法解码的字符时替换
+                    bufsize=1
+                )
+                self.tcp_processes.append(server_process)
+                
+                # 在后台读取服务器输出并检测就绪信号
+                server_ready = threading.Event()
+                
+                def read_server_output():
+                    for line in server_process.stdout:
+                        output = line.rstrip()
+                        print(f"[服务器] {output}")
+                        # 检测就绪信号 - 等待Accept线程真正启动
+                        if "Accept线程已启动" in output or "服务器就绪" in output:
+                            server_ready.set()
+                
+                threading.Thread(target=read_server_output, daemon=True).start()
+                
+                # 等待服务器就绪信号或超时
+                self.add_cnn_log("⏳ 等待服务器就绪...")
+                if server_ready.wait(timeout=15):  # 增加到15秒
+                    self.add_cnn_log("✓ 服务器就绪信号已接收")
+                    time.sleep(1)  # 额外等待1秒确保端口完全就绪
                 else:
-                    # 简单的训练循环
-                    for i in range(num_games):
-                        update_progress(i + 1, num_games, f"生成第 {i + 1} 局训练数据")
-
-                    self.add_cnn_log(f"✓ 生成了 {num_games} 局训练数据")
-                    self.add_cnn_log("开始训练神经网络...")
-
-                    # 保存模型
-                    import torch
-                    torch.save(self.cnn_agent.model.state_dict(), save_path)
-
-                self.cnn_progress_var.set(100)
-                self.cnn_progress_label.config(
-                    text=f"训练完成！\n总局数: {num_games}\n模型已保存"
-                )
-
-                self.add_cnn_log("=" * 40)
-                self.add_cnn_log("✓ 训练完成！")
-                self.add_cnn_log(f"模型已保存至: {save_path}")
-                self.add_cnn_log("=" * 40)
-
-                # 更新状态
-                self.cnn_status_label.config(
-                    text=f"✓ 模型已训练\n训练局数: {num_games}\n模型文件: {save_path.split('/')[-1]}",
-                    fg='green'
-                )
-
-                # 启用按钮
-                self.save_model_btn.config(state=NORMAL)
-                self.eval_model_btn.config(state=NORMAL)
-                self.train_model_btn.config(state=NORMAL)
-
-                messagebox.showinfo("成功", "模型训练完成！")
-
+                    self.add_cnn_log("⚠ 未收到就绪信号，继续尝试连接...")
+                
+                # 等待服务器启动并监听端口
+                self.add_cnn_log("⏳ 验证服务器端口...")
+                max_wait = 10  # 最多等待10秒
+                connected = False
+                last_error = None
+                
+                for i in range(max_wait):
+                    time.sleep(1)
+                    
+                    # 检查进程是否还在运行
+                    if server_process.poll() is not None:
+                        # 进程已退出
+                        self.add_cnn_log(f"✗ 服务器进程异常退出 (退出码: {server_process.returncode})")
+                        raise Exception(f"服务器进程启动失败，退出码: {server_process.returncode}")
+                    
+                    # 尝试连接测试服务器是否就绪
+                    for host in ['127.0.0.1', 'localhost']:
+                        try:
+                            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            test_sock.settimeout(3)  # 增加到3秒超时
+                            test_sock.connect((host, 9999))
+                            test_sock.close()
+                            connected = True
+                            self.add_cnn_log(f"✓ 服务器端口验证成功")
+                            break
+                        except Exception as e:
+                            last_error = f"{host}:9999 - {type(e).__name__}"
+                    
+                    if connected:
+                        break
+                
+                if not connected:
+                    self.add_cnn_log(f"✗ 无法连接到服务器端口")
+                    self.add_cnn_log(f"  最后错误: {last_error}")
+                    self.add_cnn_log("  提示: 可能是防火墙或端口被占用")
+                    raise Exception("服务器端口连接失败")
+                
+                # 2. 启动AI客户端
+                self.add_cnn_log("🤖 启动2个AI客户端...")
+                for i in range(2):
+                    client_cmd = [
+                        sys.executable,
+                        str(Path(__file__).parent / 'tcp_selfplay_client.py'),
+                        '--host', 'localhost',
+                        '--port', '9999',
+                        '--time', '1.5',
+                        '--games', str(num_games)
+                    ]
+                    
+                    client_process = subprocess.Popen(
+                        client_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding='utf-8',  # 指定UTF-8编码
+                        errors='replace',  # 遇到无法解码的字符时替换
+                        bufsize=1
+                    )
+                    
+                    # 读取客户端输出
+                    def read_client_output(process, client_id):
+                        for line in process.stdout:
+                            print(f"[客户端#{client_id}] {line.rstrip()}")
+                    
+                    threading.Thread(target=read_client_output, args=(client_process, i+1), daemon=True).start()
+                    
+                    self.tcp_processes.append(client_process)
+                    self.add_cnn_log(f"  ✓ 客户端 #{i+1} 已启动")
+                    time.sleep(0.5)
+                
+                # 3. 连接到服务器观战
+                self.add_cnn_log("🎨 连接到训练服务器观战...")
+                time.sleep(1)  # 让客户端先连接
+                
+                try:
+                    self.tcp_bridge = self._create_tcp_bridge()
+                    self.add_cnn_log("✓ 观战连接已建立")
+                    
+                    self.add_cnn_log("=" * 60)
+                    self.add_cnn_log("✅ TCP训练系统已启动！")
+                    self.add_cnn_log("=" * 60)
+                    self.add_cnn_log("📺 当前棋盘显示实时对弈")
+                    self.add_cnn_log(f"🔄 {num_games * 2}局训练正在后台进行")
+                    self.add_cnn_log("💾 数据自动保存到 training_data/")
+                    self.add_cnn_log("=" * 60)
+                    
+                    # 更新进度标签
+                    self.cnn_progress_label.config(
+                        text=f"TCP训练运行中...\n目标: {num_games * 2}局\n数据保存: training_data/"
+                    )
+                    
+                    # 监控训练进度
+                    self._monitor_tcp_training(num_games * 2)
+                    
+                except Exception as e:
+                    self.add_cnn_log(f"⚠ 观战连接失败: {e}")
+                    self.add_cnn_log("训练仍在后台继续...")
+                
             except Exception as e:
-                self.cnn_progress_label.config(text=f"训练失败:\n{str(e)}")
-                self.add_cnn_log(f"✗ 训练失败: {str(e)}")
+                self.add_cnn_log(f"✗ 启动失败: {e}")
+                messagebox.showerror("错误", f"TCP训练启动失败:\n{e}")
                 self.train_model_btn.config(state=NORMAL)
-                messagebox.showerror("错误", f"训练失败: {str(e)}")
-                import traceback
-                traceback.print_exc()
-
-        threading.Thread(target=train_thread, daemon=True).start()
+                self._stop_tcp_training()
+        
+        threading.Thread(target=start_tcp_training, daemon=True).start()
+    
+    def _create_tcp_bridge(self):
+        """创建TCP观战桥接"""
+        max_retries = 5
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"正在连接到训练服务器...（尝试 {attempt+1}/{max_retries}）")
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5)  # 5秒超时
+                sock.connect(('localhost', 9999))
+                sock.settimeout(None)  # 连接后取消超时
+                print("✓ TCP连接已建立")
+                
+                # 注册为观察者
+                msg = pickle.dumps({'type': 'register_observer'})
+                sock.sendall(len(msg).to_bytes(4, 'big') + msg)
+                print("✓ 已注册为观察者")
+                
+                # 启动接收线程
+                def receive_updates():
+                    buffer = b''
+                    print("观战接收线程已启动")
+                    while self.tcp_running:
+                        try:
+                            chunk = sock.recv(4096)
+                            if not chunk:
+                                print("TCP连接已关闭")
+                                break
+                            buffer += chunk
+                            
+                            while len(buffer) >= 4:
+                                msg_len = int.from_bytes(buffer[:4], 'big')
+                                if len(buffer) < 4 + msg_len:
+                                    break
+                                
+                                msg_data = buffer[4:4+msg_len]
+                                buffer = buffer[4+msg_len:]
+                                message = pickle.loads(msg_data)
+                                print(f"收到消息类型: {message.get('type')}")
+                                self._handle_tcp_message(message)
+                        except Exception as e:
+                            if self.tcp_running:
+                                print(f"接收错误: {e}")
+                                import traceback
+                                traceback.print_exc()
+                            break
+                    print("观战接收线程已退出")
+                
+                threading.Thread(target=receive_updates, daemon=True).start()
+                return sock
+                
+            except socket.timeout:
+                print(f"✗ 连接超时（尝试 {attempt+1}/{max_retries}）")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+            except Exception as e:
+                print(f"✗ 连接失败: {e}（尝试 {attempt+1}/{max_retries}）")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+        
+        raise Exception(f"连接失败：已尝试 {max_retries} 次")
+    
+    def _handle_tcp_message(self, msg):
+        """处理TCP训练消息"""
+        msg_type = msg.get('type')
+        
+        if msg_type == 'game_update':
+            board = msg.get('board')
+            move = msg.get('move')
+            move_num = msg.get('move_number', 0)
+            player = msg.get('player')
+            
+            # 添加调试日志
+            print(f"收到棋局更新: 第{move_num}手, 玩家{player}, 落子{move}")
+            
+            if board is not None:
+                def update_gui():
+                    try:
+                        # 更新棋盘
+                        if isinstance(board, np.ndarray):
+                            board_list = board.tolist()
+                        else:
+                            board_list = board
+                        
+                        self.game.board = board_list
+                        self.board = board_list
+                        self.array_to_hex(board_list)
+                        
+                        # 标记最后一步
+                        if move:
+                            x, y = move
+                            if 0 <= x < len(self.hex_board) and 0 <= y < len(self.hex_board[x]):
+                                hex_id = self.hex_board[x][y]
+                                coords = self.canvas.coords(hex_id)
+                                if coords:
+                                    cx = sum(coords[::2]) / 6
+                                    cy = sum(coords[1::2]) / 6
+                                    self.canvas.delete('last_move_marker')
+                                    self.canvas.create_oval(
+                                        cx-8, cy-8, cx+8, cy+8,
+                                        outline='yellow', width=3,
+                                        tags='last_move_marker'
+                                    )
+                        
+                        # 更新标题
+                        player_str = '红方' if player == 1 else '蓝方'
+                        self.root.title(f"海克斯棋 - TCP训练中 | 第{move_num}手 - {player_str}")
+                        print(f"GUI已更新: 第{move_num}手")
+                    except Exception as e:
+                        print(f"GUI更新失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                self.root.after(0, update_gui)
+        
+        elif msg_type == 'game_end':
+            winner = msg.get('winner')
+            moves = msg.get('moves')
+            winner_str = '红方' if winner == 1 else '蓝方'
+            print(f"对局结束: {winner_str}获胜 ({moves}手)")
+            self.add_cnn_log(f"🏆 对局结束: {winner_str}获胜 ({moves}手)")
+    
+    def _monitor_tcp_training(self, total_games):
+        """监控TCP训练进度"""
+        def monitor():
+            stats_file = Path(__file__).parent / 'training_data' / 'training_stats.json'
+            last_games = 0
+            
+            while self.tcp_running:
+                time.sleep(5)  # 每5秒检查一次
+                
+                if stats_file.exists():
+                    try:
+                        with open(stats_file) as f:
+                            stats = json.load(f)
+                        
+                        current_games = stats.get('total_games', 0)
+                        total_positions = stats.get('total_positions', 0)
+                        batches = stats.get('batches_saved', 0)
+                        
+                        if current_games != last_games:
+                            progress = int((current_games / total_games) * 100)
+                            self.cnn_progress_var.set(progress)
+                            
+                            self.cnn_progress_label.config(
+                                text=f"训练进度: {current_games}/{total_games}局 ({progress}%)\n"
+                                     f"训练位置: {total_positions} | 批次: {batches}"
+                            )
+                            
+                            self.add_cnn_log(f"📊 进度: {current_games}/{total_games}局 | {total_positions}位置")
+                            last_games = current_games
+                        
+                        # 训练完成
+                        if current_games >= total_games:
+                            self.cnn_progress_var.set(100)
+                            self.add_cnn_log("=" * 60)
+                            self.add_cnn_log("✅ 训练完成！")
+                            self.add_cnn_log(f"总对局: {current_games}")
+                            self.add_cnn_log(f"训练位置: {total_positions}")
+                            self.add_cnn_log(f"数据批次: {batches}")
+                            self.add_cnn_log("=" * 60)
+                            
+                            self._stop_tcp_training()
+                            
+                            self.root.after(0, lambda: messagebox.showinfo(
+                                "训练完成",
+                                f"TCP训练已完成！\n\n"
+                                f"对局数: {current_games}\n"
+                                f"训练位置: {total_positions}\n"
+                                f"数据保存: training_data/\n"
+                                f"模型保存: models/"
+                            ))
+                            
+                            self.train_model_btn.config(state=NORMAL)
+                            break
+                            
+                    except Exception as e:
+                        print(f"读取统计失败: {e}")
+        
+        threading.Thread(target=monitor, daemon=True).start()
+    
+    def _stop_tcp_training(self):
+        """停止TCP训练"""
+        self.tcp_running = False
+        
+        if self.tcp_bridge:
+            try:
+                self.tcp_bridge.close()
+            except:
+                pass
+        
+        for p in self.tcp_processes:
+            try:
+                p.terminate()
+                p.wait(timeout=3)
+            except:
+                try:
+                    p.kill()
+                except:
+                    pass
+        
+        self.tcp_processes = []
+        self.add_cnn_log("🛑 TCP训练系统已停止")
 
     def evaluate_cnn_model(self):
         """评估CNN模型"""
