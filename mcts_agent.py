@@ -12,10 +12,10 @@ import numpy as np
 try:
     from hex_cpp import fast_rollout
     CPP_ROLLOUT_AVAILABLE = True
-    print("✓ C++ fast_rollout已加载")
+    print("[信息] C++ fast_rollout已加载")
 except ImportError:
     CPP_ROLLOUT_AVAILABLE = False
-    print("✗ C++ fast_rollout不可用，使用Python版本")
+    print("[警告] C++ fast_rollout不可用，使用Python版本")
 
 
 class Node:
@@ -85,13 +85,8 @@ class Node:
             state.make_move(move)
             node = node.add_child(move, state)
 
-        # Simulation - 模拟（使用C++加速）
-        if CPP_ROLLOUT_AVAILABLE and hasattr(state, '_cpp_state'):
-            # 使用C++快速rollout
-            winner = fast_rollout(state._cpp_state)
-        else:
-            # 使用Python版本
-            winner = state.random_playout()
+        # Simulation - 模拟
+        winner = state.random_playout()
 
         # Backpropagation - 反向传播
         while node is not None:
@@ -235,22 +230,17 @@ class RAVENode(Node):
             moves_played.append(move)
             node = node.add_child(move, state)
 
-        # Simulation - 使用C++加速
+        # Simulation
         playout_moves = []
-        if CPP_ROLLOUT_AVAILABLE and hasattr(state, '_cpp_state'):
-            winner = fast_rollout(state._cpp_state)
-            # C++版本不返回具体走法，只返回结果
-        else:
-            # Python版本可以记录走法
-            temp_state = state.copy()
-            while temp_state.winner() == 0:
-                legal_moves = temp_state.get_legal_moves()
-                if not legal_moves:
-                    break
-                move = random.choice(legal_moves)
-                playout_moves.append(move)
-                temp_state.make_move(move)
-            winner = temp_state.winner()
+        temp_state = state.copy()
+        while temp_state.winner() == 0:
+            legal_moves = temp_state.get_legal_moves()
+            if not legal_moves:
+                break
+            move = random.choice(legal_moves)
+            playout_moves.append(move)
+            temp_state.make_move(move)
+        winner = temp_state.winner()
 
         all_moves = moves_played + playout_moves
 

@@ -35,6 +35,8 @@ class TCPTrainingManager:
         
         self.training = False
         self.training_thread = None
+        self.training_steps = 0
+        self.save_every_steps = 20
         
         if PYTORCH_AVAILABLE:
             self._init_model()
@@ -50,11 +52,13 @@ class TCPTrainingManager:
         """启动服务器"""
         self.server.start()
     
-    def start_training(self, batch_size=32, train_interval=10):
+    def start_training(self, batch_size=32, train_interval=10, save_every_steps=20):
         """启动实时训练"""
         if not PYTORCH_AVAILABLE:
             print("[错误] PyTorch不可用，无法训练")
             return
+
+        self.save_every_steps = max(1, int(save_every_steps))
         
         self.training = True
         self.training_thread = threading.Thread(
@@ -63,7 +67,7 @@ class TCPTrainingManager:
         )
         self.training_thread.daemon = True
         self.training_thread.start()
-        print(f"[训练] 训练线程已启动 (批次大小: {batch_size}, 间隔: {train_interval}秒)")
+        print(f"[训练] 训练线程已启动 (批次大小: {batch_size}, 间隔: {train_interval}秒, 保存间隔: {self.save_every_steps}步)")
     
     def _training_loop(self, batch_size, train_interval):
         """训练循环"""
@@ -91,14 +95,15 @@ class TCPTrainingManager:
             )
             
             step += 1
+            self.training_steps = step
             if step % 10 == 0:
                 stats = self.server.get_stats()
-                print(f"\n📈 训练步骤 {step}")
+                print(f"\n[训练] 训练步骤 {step}")
                 print(f"   总损失: {loss:.4f} | 策略: {policy_loss:.4f} | 价值: {value_loss:.4f}")
                 print(f"   数据: {stats['total_positions']} 位置, {stats['total_games']} 游戏")
             
             # 定期保存模型
-            if step % 100 == 0:
+            if step == 1 or step % self.save_every_steps == 0:
                 self.save_model(f'checkpoint_step_{step}.pth')
     
     def _train_step(self, states, policy_targets, value_targets):
@@ -133,7 +138,7 @@ class TCPTrainingManager:
             print("[错误] PyTorch不可用")
             return
         
-        print(f"📚 加载磁盘数据...")
+        print("[数据] 加载磁盘数据...")
         states, policies, values = self.server.load_all_data()
         
         if states is None:
@@ -196,12 +201,16 @@ class TCPTrainingManager:
     
     def stop(self):
         """停止所有服务"""
-        print("\n🛑 正在停止...")
+        print("\n[停止] 正在停止...")
         
         # 停止训练
         self.training = False
         if self.training_thread:
             self.training_thread.join(timeout=5)
+
+        # 在线训练结束时保存最后模型，避免短时训练无产物
+        if PYTORCH_AVAILABLE and self.model is not None and self.training_steps > 0:
+            self.save_model(f'latest_step_{self.training_steps}.pth')
         
         # 停止服务器
         self.server.stop()
@@ -218,6 +227,7 @@ def main():
                        help='训练模式: online=实时训练, offline=离线训练')
     parser.add_argument('--port', type=int, default=9999, help='服务器端口')
     parser.add_argument('--batch-size', type=int, default=32, help='批次大小')
+    parser.add_argument('--save-every', type=int, default=20, help='在线训练多少步保存一次模型')
     parser.add_argument('--epochs', type=int, default=10, help='训练轮数（仅离线模式）')
     
     args = parser.parse_args()
@@ -228,8 +238,8 @@ def main():
     try:
         if args.mode == 'online':
             # 实时训练模式
-            manager.start_training(batch_size=args.batch_size, train_interval=10)
-            print("\n💡 提示: 启动客户端开始自我对弈")
+            manager.start_training(batch_size=args.batch_size, train_interval=10, save_every_steps=args.save_every)
+            print("\n[提示] 启动客户端开始自我对弈")
             print("   python tcp_selfplay_client.py --games 100\n")
             
             while True:

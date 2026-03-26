@@ -137,7 +137,7 @@ class HexCNNTrainer:
             return torch.FloatTensor(tensor).unsqueeze(0).to(self.device)
 
         except Exception as e:
-            print(f"✗ 状态转换失败: {e}")
+            print(f"[错误] 状态转换失败: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -205,7 +205,7 @@ class HexCNNTrainer:
                 #  检查掩码后的有效性
                 valid_logits = masked_logits[mask == 0]
                 if len(valid_logits) == 0:
-                    print("⚠️ 掩码后无有效走法")
+                    print("[警告] 掩码后无有效走法")
                     move_idx = random.choice([m[0] * self.board_size + m[1] for m in legal_moves])
                 else:
                     # 温度采样
@@ -215,10 +215,10 @@ class HexCNNTrainer:
 
                         # 严格检查概率分布
                         if np.isnan(probs_np).any():
-                            print("⚠️ 出现NaN，使用随机走法")
+                            print("[警告] 出现NaN，使用随机走法")
                             move_idx = random.choice([m[0] * self.board_size + m[1] for m in legal_moves])
                         elif np.sum(probs_np) == 0:
-                            print("⚠️ 概率全为0，使用随机走法")
+                            print("[警告] 概率全为0，使用随机走法")
                             move_idx = random.choice([m[0] * self.board_size + m[1] for m in legal_moves])
                         else:
                             # 重新归一化概率
@@ -232,13 +232,13 @@ class HexCNNTrainer:
                 y = move_idx % self.board_size
 
                 if (x, y) not in legal_moves:
-                    print(f"⚠️ 预测的走法 ({x},{y}) 不合法，随机选择")
+                    print(f"[警告] 预测的走法 ({x},{y}) 不合法，随机选择")
                     x, y = random.choice(legal_moves)
 
                 return (x, y), value.item()
 
         except Exception as e:
-            print(f"✗ 预测失败: {e}")
+            print(f"[错误] 预测失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -266,10 +266,10 @@ class HexCNNTrainer:
             try:
                 import hex_cpp
                 use_cpp = True
-                print("✓ 使用C++加速版本")
+                print("[信息] 使用C++加速版本")
             except ImportError:
                 use_cpp = False
-                print("⚠ 使用Python版本")
+                print("[警告] 使用Python版本")
 
             from Hex_cnn import rave_mctsagent, gamestate
 
@@ -360,14 +360,14 @@ class HexCNNTrainer:
             if len(self.replay_buffer) > self.max_buffer_size:
                 self.replay_buffer = self.replay_buffer[-self.max_buffer_size:]
 
-            print(f"\n✓ 数据生成完成!")
+            print(f"\n[信息] 数据生成完成!")
             print(f"总训练样本: {len(self.replay_buffer)}")
             print(f"{'='*60}\n")
 
             return len(self.replay_buffer)
 
         except Exception as e:
-            print(f"✗ 数据生成失败: {e}")
+            print(f"[错误] 数据生成失败: {e}")
             import traceback
             traceback.print_exc()
             return 0
@@ -413,7 +413,7 @@ class HexCNNTrainer:
     def train_from_mcts_data(self, num_epochs=50, verbose=True):
         """使用MCTS数据训练模型"""
         if len(self.replay_buffer) == 0:
-            print("✗ 没有训练数据！请先运行 generate_training_data_from_mcts()")
+            print("[错误] 没有训练数据！请先运行 generate_training_data_from_mcts()")
             return
 
         print(f"\n{'='*60}")
@@ -460,7 +460,7 @@ class HexCNNTrainer:
                       f"价值: {avg_value_loss:.4f} | "
                       f"学习率: {lr:.6f}")
 
-        print(f"\n✓ 训练完成！最佳损失: {best_loss:.4f}")
+        print(f"\n[信息] 训练完成！最佳损失: {best_loss:.4f}")
         print(f"{'='*60}\n")
 
     def self_play_game(self, temperature=1.0):
@@ -500,7 +500,7 @@ class HexCNNTrainer:
             return game_data
 
         except Exception as e:
-            print(f"✗ 自我对弈失败: {e}")
+            print(f"[错误] 自我对弈失败: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -567,7 +567,7 @@ class HexCNNTrainer:
                           f"缓冲区: {len(self.replay_buffer)}, "
                           f"平均损失: {avg_loss:.4f}")
 
-        print(f"\n✓ 训练完成！最终缓冲区大小: {len(self.replay_buffer)}")
+        print(f"\n[信息] 训练完成！最终缓冲区大小: {len(self.replay_buffer)}")
 
     def train(self, num_iterations=100, games_per_iteration=50):
         """训练循环"""
@@ -602,12 +602,12 @@ class HexCNNTrainer:
                 if (game_idx + 1) % 10 == 0:
                     print(f"  完成 {game_idx + 1}/{games_per_iteration} 局游戏")
 
-            print(f"✓ 成功生成 {new_games} 局游戏")
+            print(f"[信息] 成功生成 {new_games} 局游戏")
 
             # 限制缓冲区大小
             if len(self.replay_buffer) > self.max_buffer_size:
                 self.replay_buffer = self.replay_buffer[-self.max_buffer_size:]
-                print(f"⚠ 缓冲区已满，保留最新的 {self.max_buffer_size} 条数据")
+                print(f"[警告] 缓冲区已满，保留最新的 {self.max_buffer_size} 条数据")
 
             print(f"当前训练数据池大小: {len(self.replay_buffer)}")
 
@@ -640,7 +640,7 @@ class HexCNNTrainer:
             if (iteration + 1) % 10 == 0:
                 save_path = f'hex_cnn_iter_{iteration + 1}.pth'
                 self.save_model(save_path)
-                print(f"✓ 模型已保存到 {save_path}")
+                print(f"[信息] 模型已保存到 {save_path}")
 
             # 定期诊断
             if (iteration + 1) % 5 == 0:
@@ -669,7 +669,7 @@ class HexCNNTrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
         }, path)
-        print(f"✓ 模型已保存: {path}")
+        print(f"[信息] 模型已保存: {path}")
 
     def load_model(self, path):
         """加载模型"""
@@ -678,7 +678,7 @@ class HexCNNTrainer:
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'scheduler_state_dict' in checkpoint:
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        print(f"✓ 模型已加载: {path}")
+        print(f"[信息] 模型已加载: {path}")
 
 
 if __name__ == "__main__":

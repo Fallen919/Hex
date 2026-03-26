@@ -32,16 +32,16 @@ try:
     from cnn.Hex_cnn_integration import CNNAgent
 
     CNN_AVAILABLE = True
-    print("✓ CNN模块已加载（从cnn文件夹）")
+    print("[信息] CNN模块已加载（从cnn文件夹）")
 except ImportError:
     try:
         # 如果失败，尝试直接导入
         from Hex_cnn_integration import CNNAgent
 
         CNN_AVAILABLE = True
-        print("✓ CNN模块已加载（从当前目录）")
+        print("[信息] CNN模块已加载（从当前目录）")
     except ImportError as e:
-        print(f"✗ CNN模块不可用: {e}")
+        print(f"[警告] CNN模块不可用: {e}")
         CNN_AVAILABLE = False
 
 
@@ -683,6 +683,10 @@ class Gui:
         self.tcp_processes = []
         self.tcp_bridge = None
         self.tcp_running = True
+        self.current_observed_game_id = None
+        self.current_observed_client = None
+        self.current_observed_move_num = 0
+        self.enable_winner_popup_test = True
         
         def start_tcp_training():
             try:
@@ -884,12 +888,12 @@ class Gui:
                 sock.settimeout(5)  # 5秒超时
                 sock.connect(('localhost', 9999))
                 sock.settimeout(None)  # 连接后取消超时
-                print("✓ TCP连接已建立")
+                print("[连接] TCP连接已建立")
                 
                 # 注册为观察者
                 msg = pickle.dumps({'type': 'register_observer'})
                 sock.sendall(len(msg).to_bytes(4, 'big') + msg)
-                print("✓ 已注册为观察者")
+                print("[连接] 已注册为观察者")
                 
                 # 启动接收线程
                 def receive_updates():
@@ -925,11 +929,11 @@ class Gui:
                 return sock
                 
             except socket.timeout:
-                print(f"✗ 连接超时（尝试 {attempt+1}/{max_retries}）")
+                print(f"[错误] 连接超时（尝试 {attempt+1}/{max_retries}）")
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
             except Exception as e:
-                print(f"✗ 连接失败: {e}（尝试 {attempt+1}/{max_retries}）")
+                print(f"[错误] 连接失败: {e}（尝试 {attempt+1}/{max_retries}）")
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
         
@@ -938,15 +942,39 @@ class Gui:
     def _handle_tcp_message(self, msg):
         """处理TCP训练消息"""
         msg_type = msg.get('type')
+
+        if msg_type == 'observer_switched':
+            client = msg.get('client')
+            game_id = msg.get('game_id')
+            reason = msg.get('reason', 'unknown')
+            self.current_observed_client = client
+            self.current_observed_game_id = game_id
+            self.current_observed_move_num = 0
+
+            switch_text = f"🔄 已切换观战对局: {game_id}"
+            print(f"观战切换: client={client}, game_id={game_id}, reason={reason}")
+            self.add_cnn_log(switch_text)
+            self.root.title(f"海克斯棋 - TCP训练中 | 当前对局 {game_id}")
+            return
         
         if msg_type == 'game_update':
             board = msg.get('board')
             move = msg.get('move')
             move_num = msg.get('move_number', 0)
             player = msg.get('player')
+            game_id = msg.get('game_id')
+            client = msg.get('client')
+
+            if game_id and game_id != self.current_observed_game_id:
+                self.current_observed_game_id = game_id
+                self.current_observed_client = client
+                self.current_observed_move_num = 0
+                self.add_cnn_log(f"🆕 新对局开始: {game_id}")
+                self.canvas.delete('last_move_marker')
             
             # 添加调试日志
-            print(f"收到棋局更新: 第{move_num}手, 玩家{player}, 落子{move}")
+            print(f"收到棋局更新: game_id={game_id}, 第{move_num}手, 玩家{player}, 落子{move}")
+            self.current_observed_move_num = move_num
             
             if board is not None:
                 def update_gui():
@@ -979,7 +1007,8 @@ class Gui:
                         
                         # 更新标题
                         player_str = '红方' if player == 1 else '蓝方'
-                        self.root.title(f"海克斯棋 - TCP训练中 | 第{move_num}手 - {player_str}")
+                        title_game_id = game_id if game_id else '未知对局'
+                        self.root.title(f"海克斯棋 - TCP训练中 | {title_game_id} | 第{move_num}手 - {player_str}")
                         print(f"GUI已更新: 第{move_num}手")
                     except Exception as e:
                         print(f"GUI更新失败: {e}")
@@ -991,15 +1020,30 @@ class Gui:
         elif msg_type == 'game_end':
             winner = msg.get('winner')
             moves = msg.get('moves')
+            game_id = msg.get('game_id')
+
+            if self.current_observed_game_id and game_id and game_id != self.current_observed_game_id:
+                print(f"忽略非当前对局结束消息: current={self.current_observed_game_id}, msg={game_id}")
+                return
+
             winner_str = '红方' if winner == 1 else '蓝方'
-            print(f"对局结束: {winner_str}获胜 ({moves}手)")
-            self.add_cnn_log(f"🏆 对局结束: {winner_str}获胜 ({moves}手)")
+            end_game_id = game_id if game_id else self.current_observed_game_id
+            print(f"对局结束: game_id={end_game_id}, {winner_str}获胜 ({moves}手)")
+            self.add_cnn_log(f"🏆 对局结束 [{end_game_id}]: {winner_str}获胜 ({moves}手)")
+
+            if self.enable_winner_popup_test:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "对局结束",
+                    f"对局 [{end_game_id}] 已结束\n\n胜者: {winner_str}\n手数: {moves}"
+                ))
     
     def _monitor_tcp_training(self, total_games):
         """监控TCP训练进度"""
         def monitor():
             stats_file = Path(__file__).parent / 'training_data' / 'training_stats.json'
-            last_games = 0
+            last_completed = -1
+            initial_games = 0
+            baseline_ready = False
             
             while self.tcp_running:
                 time.sleep(5)  # 每5秒检查一次
@@ -1008,29 +1052,36 @@ class Gui:
                     try:
                         with open(stats_file) as f:
                             stats = json.load(f)
-                        
+
                         current_games = stats.get('total_games', 0)
                         total_positions = stats.get('total_positions', 0)
                         batches = stats.get('batches_saved', 0)
+
+                        if not baseline_ready:
+                            initial_games = current_games
+                            baseline_ready = True
+
+                        completed_games = max(0, current_games - initial_games)
+                        capped_completed = min(completed_games, total_games)
+                        progress = int((capped_completed / total_games) * 100) if total_games > 0 else 0
                         
-                        if current_games != last_games:
-                            progress = int((current_games / total_games) * 100)
+                        if capped_completed != last_completed:
                             self.cnn_progress_var.set(progress)
                             
                             self.cnn_progress_label.config(
-                                text=f"训练进度: {current_games}/{total_games}局 ({progress}%)\n"
+                                text=f"训练进度: {capped_completed}/{total_games}局 ({progress}%)\n"
                                      f"训练位置: {total_positions} | 批次: {batches}"
                             )
                             
-                            self.add_cnn_log(f"📊 进度: {current_games}/{total_games}局 | {total_positions}位置")
-                            last_games = current_games
+                            self.add_cnn_log(f"📊 进度: {capped_completed}/{total_games}局 | {total_positions}位置")
+                            last_completed = capped_completed
                         
                         # 训练完成
-                        if current_games >= total_games:
+                        if completed_games >= total_games:
                             self.cnn_progress_var.set(100)
                             self.add_cnn_log("=" * 60)
                             self.add_cnn_log("✅ 训练完成！")
-                            self.add_cnn_log(f"总对局: {current_games}")
+                            self.add_cnn_log(f"本次对局: {total_games}")
                             self.add_cnn_log(f"训练位置: {total_positions}")
                             self.add_cnn_log(f"数据批次: {batches}")
                             self.add_cnn_log("=" * 60)
@@ -1040,7 +1091,7 @@ class Gui:
                             self.root.after(0, lambda: messagebox.showinfo(
                                 "训练完成",
                                 f"TCP训练已完成！\n\n"
-                                f"对局数: {current_games}\n"
+                                f"本次对局数: {total_games}\n"
                                 f"训练位置: {total_positions}\n"
                                 f"数据保存: training_data/\n"
                                 f"模型保存: models/"
@@ -1755,7 +1806,7 @@ class Gui:
 
             # 执行前最后一次检查
             if self.game.board[move[0], move[1]] != 0:
-                print(f"✗ 致命错误: AI返回的位置 {move} 已被占用")
+                print(f"[错误] 致命错误: AI返回的位置 {move} 已被占用")
                 print(f"   当前位置值: {self.game.board[move[0], move[1]]}")
                 messagebox.showerror("错误", f"AI返回了已占用的位置 {move}")
                 return

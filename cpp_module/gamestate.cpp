@@ -33,15 +33,15 @@ std::vector<int> GameState::get_board() const {
 }
 
 void GameState::place_red(int x, int y) {
-    // Á¬½Óµ½±ß½ç (y·½Ïò)
-    if (y == 0) {
+    // è¿æ¥åˆ°è¾¹ç•Œï¼ˆxæ–¹å‘ï¼šä¸Š/ä¸‹ï¼‰
+    if (x == 0) {
         red_groups.join_int_tuple(EDGE1, x, y);
     }
-    if (y == size - 1) {
+    if (x == size - 1) {
         red_groups.join_int_tuple(EDGE2, x, y);
     }
 
-    // Á¬½Óµ½ÏàÁÚµÄºìÉ«Æå×Ó - Ê¹ÓÃ join_tuple
+    // ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½ÚµÄºï¿½É«ï¿½ï¿½ï¿½ï¿½ - Ê¹ï¿½ï¿½ join_tuple
     auto neighs = neighbors(x, y);
     for (const auto& n : neighs) {
         if (board_data[n.first * size + n.second] == RED) {
@@ -51,15 +51,15 @@ void GameState::place_red(int x, int y) {
 }
 
 void GameState::place_blue(int x, int y) {
-    // Á¬½Óµ½±ß½ç (x·½Ïò)
-    if (x == 0) {
+    // è¿æ¥åˆ°è¾¹ç•Œï¼ˆyæ–¹å‘ï¼šå·¦/å³ï¼‰
+    if (y == 0) {
         blue_groups.join_int_tuple(EDGE1, x, y);
     }
-    if (x == size - 1) {
+    if (y == size - 1) {
         blue_groups.join_int_tuple(EDGE2, x, y);
     }
 
-    // Á¬½Óµ½ÏàÁÚµÄÀ¶É«Æå×Ó - Ê¹ÓÃ join_tuple
+    // ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½ - Ê¹ï¿½ï¿½ join_tuple
     auto neighs = neighbors(x, y);
     for (const auto& n : neighs) {
         if (board_data[n.first * size + n.second] == BLUE) {
@@ -124,7 +124,7 @@ std::vector<std::pair<int, int>> GameState::moves() const {
 std::vector<std::pair<int, int>> GameState::neighbors(int x, int y) const {
     std::vector<std::pair<int, int>> result;
 
-    // Áù¸ö·½ÏòµÄÁÚ¾Ó (hex grid)
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¾ï¿½ (hex grid)
     int dx[] = { -1, -1, 0, 0, 1, 1 };
     int dy[] = { 0, 1, -1, 1, -1, 0 };
 

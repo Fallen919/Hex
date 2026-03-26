@@ -8,8 +8,8 @@ try:
 
     __all__ = ['CNNAgent', 'HexCNNTrainer']
 
-    print("✓ CNN包初始化成功")
+    print("[信息] CNN包初始化成功")
 
 except ImportError as e:
-    print(f"⚠ CNN包部分模块导入失败: {e}")
+    print(f"[警告] CNN包部分模块导入失败: {e}")
     __all__ = []

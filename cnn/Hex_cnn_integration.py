@@ -35,14 +35,14 @@ def _import_game_core():
     # 添加项目根目录到sys.path
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-        print(f"✓ 已添加项目根目录: {project_root}")
+        print(f"[信息] 已添加项目根目录: {project_root}")
 
     try:
         import game_core
-        print(f"✓ 已导入game_core模块: {game_core.__file__}")
+        print(f"[信息] 已导入game_core模块: {game_core.__file__}")
         return game_core.GameState
     except ImportError as e:
-        print(f"✗ 无法导入game_core: {e}")
+        print(f"[错误] 无法导入game_core: {e}")
         print(f"当前sys.path: {sys.path[:3]}")
         return None
 
@@ -56,10 +56,10 @@ def _import_hex_cpp():
     """
     try:
         import hex_cpp
-        print(f"✓ C++模块已加载: {hex_cpp.__file__}")
+        print(f"[信息] C++模块已加载: {hex_cpp.__file__}")
         return hex_cpp
     except ImportError as e:
-        print(f"✗ C++模块加载失败: {e}")
+        print(f"[警告] C++模块加载失败: {e}")
         return None
 
 
@@ -86,14 +86,14 @@ elif 'Hex_cnn_model' in sys.modules:
 try:
     from .Hex_cnn_model import HexCNNTrainer
 
-    print("✓ 已导入HexCNNTrainer（相对导入）")
+    print("[信息] 已导入HexCNNTrainer（相对导入）")
 except ImportError:
     try:
         from Hex_cnn_model import HexCNNTrainer
 
-        print("✓ 已导入HexCNNTrainer（直接导入）")
+        print("[信息] 已导入HexCNNTrainer（直接导入）")
     except ImportError as e:
-        print(f"✗ 导入HexCNNTrainer失败: {e}")
+        print(f"[错误] 导入HexCNNTrainer失败: {e}")
         HexCNNTrainer = None
 
 # 验证方法签名
@@ -124,7 +124,7 @@ class CNNAgent:
         self.hex_cpp = HEX_CPP_MODULE
 
         if not self.has_cpp:
-            print("⚠ 警告: C++模块不可用，将使用Python实现（速度较慢）")
+            print("[警告] C++模块不可用，将使用Python实现（速度较慢）")
 
         self.board_size = board_size
         self.learning_rate = 1e-3
@@ -136,14 +136,14 @@ class CNNAgent:
 
             if model_path:
                 self.load_model(model_path)
-                print(f"✓ 已加载CNN模型: {model_path}")
+                print(f"[信息] 已加载CNN模型: {model_path}")
             else:
-                print("⚠ 使用未训练的CNN模型")
+                print("[警告] 使用未训练的CNN模型")
 
             self.model_available = True
 
         except Exception as e:
-            print(f"⚠ CNN模型初始化失败: {e}")
+            print(f"[警告] CNN模型初始化失败: {e}")
             print("将回退到MCTS模式")
             self.model_available = False
 
@@ -178,16 +178,16 @@ class CNNAgent:
                 new_state.size = state.size
 
                 self.rootstate = new_state
-                print(f"✓ 已复制游戏状态（C++ -> Python）")
+                print("[信息] 已复制游戏状态（C++ -> Python）")
 
             else:
                 # Python状态直接深拷贝
                 import copy
                 self.rootstate = copy.deepcopy(state)
-                print("✓ 已复制游戏状态（Python）")
+                print("[信息] 已复制游戏状态（Python）")
 
         except Exception as e:
-            print(f"✗ 复制状态失败: {e}")
+            print(f"[错误] 复制状态失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -212,7 +212,7 @@ class CNNAgent:
     def best_move(self, think_time=1):
         """获取最佳走法"""
         if not self.model_available or self.rootstate is None:
-            print("⚠️ 模型或状态不可用")
+            print("[警告] 模型或状态不可用")
             return None
 
         try:
@@ -230,7 +230,7 @@ class CNNAgent:
 
                 #  严格验证合法走法
                 if not legal_moves:
-                    print("⚠️ 没有合法走法")
+                    print("[警告] 没有合法走法")
                     return None
 
                 # 获取模型预测
@@ -246,12 +246,12 @@ class CNNAgent:
 
                     # 验证坐标范围
                     if not (0 <= x < self.rootstate.size and 0 <= y < self.rootstate.size):
-                        print(f"⚠️ 坐标越界: {move}")
+                        print(f"[警告] 坐标越界: {move}")
                         return self._get_random_valid_move()
 
                     # 验证位置是否空闲
                     if self.rootstate.board[x, y] != 0:
-                        print(f"⚠️ 位置已占用: {move}, 值={self.rootstate.board[x, y]}")
+                        print(f"[警告] 位置已占用: {move}, 值={self.rootstate.board[x, y]}")
                         print(f"   当前棋盘状态（部分）:")
                         for i in range(max(0, x - 1), min(self.rootstate.size, x + 2)):
                             print(f"   第{i}行: {self.rootstate.board[i, :]}")
@@ -259,16 +259,16 @@ class CNNAgent:
 
                     # 验证是否在合法走法列表中
                     if move not in legal_moves:
-                        print(f"⚠️ 走法不在合法列表中: {move}")
+                        print(f"[警告] 走法不在合法列表中: {move}")
                         return self._get_random_valid_move()
 
-                    print(f"✓ CNN走法: {move}, 评分: {value:.3f}")
+                    print(f"[信息] CNN走法: {move}, 评分: {value:.3f}")
                     return move
 
                 return self._get_random_valid_move()
 
         except Exception as e:
-            print(f"✗ CNN异常: {e}")
+            print(f"[错误] CNN异常: {e}")
             import traceback
             traceback.print_exc()
             return self._get_random_valid_move()
@@ -276,7 +276,7 @@ class CNNAgent:
     def move(self, move):
         """执行走法"""
         if self.rootstate is None:
-            print("⚠️ rootstate未初始化")
+            print("[警告] rootstate未初始化")
             return
 
         try:
@@ -291,17 +291,17 @@ class CNNAgent:
                 )
                 self.rootstate.toplay = cpp_state.turn()
 
-                print(f"✓ 状态已更新: 走法 {move}, 下一手 {self.rootstate.toplay}")
+                print(f"[信息] 状态已更新: 走法 {move}, 下一手 {self.rootstate.toplay}")
 
             # 方案2：纯Python状态
             else:
                 if not (0 <= move[0] < self.rootstate.size and
                         0 <= move[1] < self.rootstate.size):
-                    print(f"✗ 无效走法: {move}")
+                    print(f"[错误] 无效走法: {move}")
                     return
 
                 if self.rootstate.board[move[0], move[1]] != 0:
-                    print(f"✗ 位置已占用: {move}")
+                    print(f"[错误] 位置已占用: {move}")
                     return
 
                 # 落子
@@ -310,13 +310,13 @@ class CNNAgent:
                 # 切换玩家
                 self.rootstate.toplay = 3 - self.rootstate.toplay
 
-                print(f"✓ 状态已更新: 走法 {move}, 下一手 {self.rootstate.toplay}")
+                print(f"[信息] 状态已更新: 走法 {move}, 下一手 {self.rootstate.toplay}")
 
         except AttributeError as e:
             print(f"更新状态失败（属性错误）: {e}")
 
         except Exception as e:
-            print(f"✗ 更新状态失败: {e}")
+            print(f"[错误] 更新状态失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -395,7 +395,7 @@ class CNNAgent:
             checkpoint['optimizer_lr'] = self.trainer.optimizer.param_groups[0]['lr']
 
         torch.save(checkpoint, checkpoint_path)
-        print(f"✓ 训练检查点已保存: {checkpoint_path}")
+        print(f"[信息] 训练检查点已保存: {checkpoint_path}")
 
     def load_checkpoint(self, path):
         """
@@ -449,11 +449,11 @@ class CNNAgent:
             epoch = checkpoint.get('epoch', 0)
             loss = checkpoint.get('loss', 0)
 
-            print(f"✓ 检查点已加载: epoch {epoch}, loss {loss:.4f}")
+            print(f"[信息] 检查点已加载: epoch {epoch}, loss {loss:.4f}")
             return True
 
         except Exception as e:
-            print(f"✗ 加载检查点失败: {e}")
+            print(f"[错误] 加载检查点失败: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -473,7 +473,7 @@ class CNNAgent:
             self.trainer.model.state_dict(),
             path
         )
-        print(f"✓ 推理模型已保存: {path}")
+        print(f"[信息] 推理模型已保存: {path}")
 
     def load_model(self, path):
         """
@@ -502,7 +502,7 @@ class CNNAgent:
             if isinstance(loaded_data, dict):
                 if 'model_state_dict' in loaded_data:
                     # Checkpoint格式
-                    print("✓ 检测到checkpoint格式，正在提取模型权重...")
+                    print("[信息] 检测到checkpoint格式，正在提取模型权重...")
                     state_dict = loaded_data['model_state_dict']
 
                     # 打印额外信息
@@ -513,15 +513,15 @@ class CNNAgent:
                     if 'board_size' in loaded_data:
                         expected_size = loaded_data['board_size']
                         if expected_size != self.board_size:
-                            print(f"⚠️ 警告: 模型棋盘大小({expected_size})与当前({self.board_size})不匹配")
+                            print(f"[警告] 模型棋盘大小({expected_size})与当前({self.board_size})不匹配")
                             return False
                 else:
                     # 直接的state_dict
-                    print("✓ 检测到纯模型格式")
+                    print("[信息] 检测到纯模型格式")
                     state_dict = loaded_data
             else:
                 # 旧格式
-                print("✓ 检测到旧格式模型")
+                print("[信息] 检测到旧格式模型")
                 state_dict = loaded_data
 
             # 验证state_dict的keys
@@ -533,7 +533,7 @@ class CNNAgent:
             unexpected_keys = loaded_keys - model_keys
 
             if missing_keys:
-                print(f"⚠️ 警告: 模型缺少以下参数:")
+                print("[警告] 模型缺少以下参数:")
                 for key in list(missing_keys)[:5]:
                     print(f"    {key}")
                 if len(missing_keys) > 5:
@@ -541,7 +541,7 @@ class CNNAgent:
                 return False
 
             if unexpected_keys:
-                print(f"⚠️ 警告: 发现意外的参数:")
+                print("[警告] 发现意外的参数:")
                 for key in list(unexpected_keys)[:5]:
                     print(f"    {key}")
                 if len(unexpected_keys) > 5:
@@ -555,13 +555,13 @@ class CNNAgent:
             self.gamestate = None
             self.rootstate = None
 
-            print(f"✓ 模型权重加载成功！")
+            print("[信息] 模型权重加载成功！")
             print(f"  参数总数: {sum(p.numel() for p in self.trainer.model.parameters()):,}")
 
             return True
 
         except Exception as e:
-            print(f"✗ 加载模型失败: {e}")
+            print(f"[错误] 加载模型失败: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -604,7 +604,7 @@ class CNNAgent:
                     print(f"  学习率: {checkpoint['learning_rate']}")
             else:
                 # 已经是纯模型
-                print("✓ 输入文件已经是纯模型格式")
+                print("[信息] 输入文件已经是纯模型格式")
                 state_dict = checkpoint
 
             # 保存为纯模型
@@ -615,14 +615,14 @@ class CNNAgent:
             test_load = torch.load(output_path, map_location=self.device, weights_only=False)
 
             if isinstance(test_load, dict) and 'model_state_dict' in test_load:
-                print("⚠️ 警告: 转换后仍包含checkpoint结构")
+                print("[警告] 转换后仍包含checkpoint结构")
                 return False
 
             # 检查文件大小
             original_size = os.path.getsize(checkpoint_path) / 1024 / 1024
             converted_size = os.path.getsize(output_path) / 1024 / 1024
 
-            print(f"\n✓ 模型转换成功！")
+            print("\n[信息] 模型转换成功！")
             print(f"  原始文件: {original_size:.2f} MB")
             print(f"  转换后: {converted_size:.2f} MB")
             print(
@@ -631,7 +631,7 @@ class CNNAgent:
             return True
 
         except Exception as e:
-            print(f"✗ 转换失败: {e}")
+            print(f"[错误] 转换失败: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -689,7 +689,7 @@ class CNNAgent:
         # 原有代码：参数验证
         # ========================================
         if kwargs:
-            warning_msg = f"⚠️ 警告：收到未使用的参数: {kwargs}"
+            warning_msg = f"[警告] 收到未使用的参数: {kwargs}"
             print(warning_msg)
             logger.warning(warning_msg)
 
@@ -733,14 +733,14 @@ class CNNAgent:
         )
 
         if num_positions == 0:
-            error_msg = "✗ 数据生成失败"
+            error_msg = "[错误] 数据生成失败"
             print(error_msg)
             logger.error(error_msg)
             if progress_callback:
                 progress_callback(0, 1, "数据生成失败")
             return
 
-        logger.info(f"✓ 成功生成 {num_positions} 个训练样本")
+        logger.info(f"[信息] 成功生成 {num_positions} 个训练样本")
         logger.info(f"经验池大小: {len(self.trainer.replay_buffer)}")
 
         # ========================================
@@ -1224,51 +1224,51 @@ def test_imports():
     print(f"\n{'='*60}")
     print("GameState导入测试:")
     if _GAME_CORE_AVAILABLE and GameState is not None:
-        print(f"  ✓ GameState可用")
+        print("  [信息] GameState可用")
         print(f"  模块位置: {GameState.__module__}")
         try:
             test_game = GameState(size=11)
-            print(f"  ✓ 成功创建 GameState(size=11)")
+            print("  [信息] 成功创建 GameState(size=11)")
             print(f"  棋盘形状: {test_game.board.shape}")
         except Exception as e:
-            print(f"  ✗ 创建GameState失败: {e}")
+            print(f"  [错误] 创建GameState失败: {e}")
     else:
-        print(f"  ✗ GameState不可用")
+        print("  [错误] GameState不可用")
 
     # 测试hex_cpp
     print(f"\n{'='*60}")
     print("hex_cpp导入测试:")
     if HAS_CPP_AVAILABLE and HEX_CPP_MODULE is not None:
-        print(f"  ✓ hex_cpp可用")
+        print("  [信息] hex_cpp可用")
         print(f"  模块位置: {HEX_CPP_MODULE.__file__}")
         try:
             test_cpp = HEX_CPP_MODULE.GameState(11)
-            print(f"  ✓ 成功创建 hex_cpp.GameState(11)")
+            print("  [信息] 成功创建 hex_cpp.GameState(11)")
         except Exception as e:
-            print(f"  ✗ 创建C++ GameState失败: {e}")
+            print(f"  [错误] 创建C++ GameState失败: {e}")
     else:
-        print(f"  ✗ hex_cpp不可用")
+        print("  [错误] hex_cpp不可用")
 
     # 测试HexCNNTrainer
     print(f"\n{'='*60}")
     print("HexCNNTrainer导入测试:")
     if HexCNNTrainer is not None:
-        print(f"  ✓ HexCNNTrainer可用")
+        print("  [信息] HexCNNTrainer可用")
         try:
             trainer = HexCNNTrainer(board_size=11)
-            print(f"  ✓ 成功创建 HexCNNTrainer(board_size=11)")
+            print("  [信息] 成功创建 HexCNNTrainer(board_size=11)")
             print(f"  设备: {trainer.device}")
         except Exception as e:
-            print(f"  ✗ 创建HexCNNTrainer失败: {e}")
+            print(f"  [错误] 创建HexCNNTrainer失败: {e}")
     else:
-        print(f"  ✗ HexCNNTrainer不可用")
+        print("  [错误] HexCNNTrainer不可用")
 
     # 测试CNNAgent
     print(f"\n{'='*60}")
     print("CNNAgent创建测试:")
     try:
         agent = CNNAgent(board_size=11)
-        print(f"  ✓ 成功创建 CNNAgent(board_size=11)")
+        print("  [信息] 成功创建 CNNAgent(board_size=11)")
         print(f"  模型可用: {agent.model_available}")
         print(f"  C++可用: {agent.has_cpp}")
 
@@ -1276,10 +1276,10 @@ def test_imports():
         if _GAME_CORE_AVAILABLE and GameState is not None:
             test_game = GameState(size=11)
             agent.set_gamestate(test_game)
-            print(f"  ✓ set_gamestate执行成功")
+            print("  [信息] set_gamestate执行成功")
 
     except Exception as e:
-        print(f"  ✗ 创建CNNAgent失败: {e}")
+        print(f"  [错误] 创建CNNAgent失败: {e}")
         import traceback
         traceback.print_exc()
 
@@ -1300,35 +1300,35 @@ def test_model_conversion():
         # 创建临时checkpoint
         temp_checkpoint = "test_checkpoint.pth"
         agent.save_checkpoint(temp_checkpoint, epoch=1, loss=0.5)
-        print(f"✓ 临时checkpoint已创建: {temp_checkpoint}")
+        print(f"[信息] 临时checkpoint已创建: {temp_checkpoint}")
 
         # 转换为纯模型
         temp_model = "test_model.pth"
         success = agent.convert_checkpoint_to_model(temp_checkpoint, temp_model)
 
         if success:
-            print(f"✓ 转换成功")
+            print("[信息] 转换成功")
 
             # 测试加载转换后的模型
             agent2 = CNNAgent(board_size=11)
             load_success = agent2.load_model(temp_model)
 
             if load_success:
-                print(f"✓ 转换后的模型加载成功")
+                print("[信息] 转换后的模型加载成功")
             else:
-                print(f"✗ 转换后的模型加载失败")
+                print("[错误] 转换后的模型加载失败")
 
             # 清理临时文件
             if os.path.exists(temp_checkpoint):
                 os.remove(temp_checkpoint)
             if os.path.exists(temp_model):
                 os.remove(temp_model)
-            print(f"✓ 临时文件已清理")
+            print("[信息] 临时文件已清理")
         else:
-            print(f"✗ 转换失败")
+            print("[错误] 转换失败")
 
     except Exception as e:
-        print(f"✗ 测试失败: {e}")
+        print(f"[错误] 测试失败: {e}")
         import traceback
         traceback.print_exc()
 

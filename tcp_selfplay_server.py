@@ -29,6 +29,7 @@ class TrainingDataServer:
         self.observers = []  # 观战客户端列表 (address)
         self.observer_sockets = {}  # 观战者socket映射 {address: socket}
         self.primary_game_client = None  # 主要观战的客户端（第一个连接的）
+        self.client_game_counters = {}  # {address: game_index}
         
         # 统计信息
         self.total_games = 0
@@ -45,6 +46,13 @@ class TrainingDataServer:
         self.active_games = {}  # {client_id: game_state}
         
         self.lock = threading.Lock()
+
+    def _write_stats_file(self):
+        """将当前统计写入 training_stats.json（供GUI实时监控）"""
+        stats = self.get_stats()
+        stats_file = self.save_dir / 'training_stats.json'
+        with open(stats_file, 'w') as f:
+            json.dump(stats, f, indent=2)
         
     def start(self):
         """启动服务器"""
@@ -53,6 +61,9 @@ class TrainingDataServer:
         self.socket.bind((self.host, self.port))
         self.socket.listen(5)
         self.running = True
+
+        # 启动时重置统计文件，避免GUI读取到上一次训练残留数据
+        self._write_stats_file()
         
         print(f"[服务器] 训练数据服务器启动")
         print(f"[服务器] 监听地址: {self.host}:{self.port}")
@@ -152,17 +163,36 @@ class TrainingDataServer:
             print(f"[游戏] 客户端 {address} 开始新游戏")
             # 初始化游戏状态
             with self.lock:
+                game_index = self.client_game_counters.get(address, 0) + 1
+                self.client_game_counters[address] = game_index
+                game_id = f"{address[0]}:{address[1]}#{game_index}"
+
                 self.active_games[address] = {
                     'board_size': message.get('board_size', 11),
                     'board': None,
                     'moves': [],
-                    'current_player': 1
+                    'current_player': 1,
+                    'game_index': game_index,
+                    'game_id': game_id
                 }
                 
                 # 如果这是第一个游戏客户端，设为主观战对象
                 if self.primary_game_client is None:
                     self.primary_game_client = address
                     print(f"[观战] 客户端 {address} 被设为主观战对象")
+
+            with self.lock:
+                active_game = self.active_games.get(address)
+                current_game_id = active_game['game_id'] if active_game else None
+                is_primary = (address == self.primary_game_client)
+
+            if is_primary and current_game_id is not None:
+                self._broadcast_to_observers({
+                    'type': 'observer_switched',
+                    'client': str(address),
+                    'game_id': current_game_id,
+                    'reason': 'game_start'
+                })
             
         elif msg_type == 'move':
             # 接收走法更新（用于观战）
@@ -176,8 +206,10 @@ class TrainingDataServer:
                     self.active_games[address]['moves'].append(move)
                     self.active_games[address]['current_player'] = player
                     move_num = len(self.active_games[address]['moves'])
+                    game_id = self.active_games[address].get('game_id')
                 else:
                     move_num = 0
+                    game_id = None
                 
                 num_observers = len(self.observer_sockets)
                 
@@ -189,6 +221,7 @@ class TrainingDataServer:
                 update_msg = {
                     'type': 'game_update',
                     'client': str(address),
+                    'game_id': game_id,
                     'move': move,
                     'board': board,
                     'player': player,
@@ -206,16 +239,26 @@ class TrainingDataServer:
             # 游戏结束
             winner = message.get('winner')
             moves = message.get('moves')
+            finished_game_id = None
+            switched_client = None
+            switched_game_id = None
+            was_primary = False
             with self.lock:
                 self.total_games += 1
+
+                if address in self.active_games:
+                    finished_game_id = self.active_games[address].get('game_id')
+                was_primary = (address == self.primary_game_client)
                 
                 # 如果结束的是主观战游戏，重置主观战客户端
-                if address == self.primary_game_client:
+                if was_primary:
                     self.primary_game_client = None
                     # 如果还有其他活跃游戏，选择下一个
                     for client_addr in self.active_games:
                         if client_addr != address:
                             self.primary_game_client = client_addr
+                            switched_client = client_addr
+                            switched_game_id = self.active_games[client_addr].get('game_id')
                             print(f"[观战] 切换主观战对象到 {client_addr}")
                             break
                 
@@ -224,14 +267,26 @@ class TrainingDataServer:
                     del self.active_games[address]
             
             print(f"[完成] 游戏 #{self.total_games} 完成 | 胜者: {'红方' if winner == 1 else '蓝方'} | 步数: {moves}")
+
+            # 实时刷新统计文件，供GUI进度监控使用
+            self._write_stats_file()
             
             # 通知观战者游戏结束（只通知主观战游戏）
-            if address == self.primary_game_client or self.primary_game_client is None:
+            if was_primary or self.primary_game_client is None:
                 self._broadcast_to_observers({
                     'type': 'game_end',
                     'client': str(address),
+                    'game_id': finished_game_id,
                     'winner': winner,
                     'moves': moves
+                })
+
+            if switched_client is not None and switched_game_id is not None:
+                self._broadcast_to_observers({
+                    'type': 'observer_switched',
+                    'client': str(switched_client),
+                    'game_id': switched_game_id,
+                    'reason': 'primary_finished'
                 })
             
         elif msg_type == 'register_observer':
@@ -337,17 +392,6 @@ class TrainingDataServer:
         
         self.current_batch = []
     
-    def get_stats(self):
-        """获取统计信息"""
-        with self.lock:
-            return {
-                'total_games': self.total_games,
-                'total_positions': self.total_positions,
-                'connected_clients': len(self.clients),
-                'batches_saved': len(self.data_batches),
-                'memory_buffer_size': len(self.memory_buffer)
-            }
-    
     def sample_batch(self, batch_size=32):
         """从内存缓冲区采样批次（用于实时训练）"""
         with self.lock:
@@ -397,10 +441,8 @@ class TrainingDataServer:
             self.socket.close()
         
         # 保存统计信息
+        self._write_stats_file()
         stats = self.get_stats()
-        stats_file = self.save_dir / 'training_stats.json'
-        with open(stats_file, 'w') as f:
-            json.dump(stats, f, indent=2)
         
         print("[关闭] 服务器已关闭")
         print(f"  总游戏数: {stats['total_games']}")

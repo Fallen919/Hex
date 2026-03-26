@@ -8,6 +8,7 @@ import pickle
 import numpy as np
 import time
 import argparse
+import sys
 from game_core import GameState
 from mcts_agent import RAVEAgent
 
@@ -177,11 +178,11 @@ class SelfPlayClient:
                     if policy_sum > 0.99:  # 允许小的数值误差
                         return policy
                     else:
-                        print(f"⚠ 策略分布异常 (总和={policy_sum:.3f})，使用均匀分布")
+                        print(f"[警告] 策略分布异常 (总和={policy_sum:.3f})，使用均匀分布")
             else:
-                print(f"⚠ MCTS root没有子节点，使用均匀分布")
+                print("[警告] MCTS root没有子节点，使用均匀分布")
         else:
-            print(f"⚠ MCTS root不可用，使用均匀分布")
+            print("[警告] MCTS root不可用，使用均匀分布")
         
         # 后备方案：使用均匀分布
         legal_moves = game.get_legal_moves()
@@ -196,11 +197,9 @@ class SelfPlayClient:
         """运行自我对弈"""
         if not self.connected:
             if not self.connect():
-                print("\n按任意键退出...")
-                input()
                 return
         
-        print(f"[开始] 开始自我对弈")
+        print("[开始] 开始自我对弈")
         print(f"   算法: {self.agent_type}")
         print(f"   思考时间: {self.think_time}秒")
         print(f"   棋盘大小: {self.board_size}x{self.board_size}")
@@ -225,17 +224,16 @@ class SelfPlayClient:
                 print(f"游戏 #{game_num}: {winner_str}胜 | {moves}手 | {elapsed:.1f}秒")
                 
         except KeyboardInterrupt:
-            print("\n⏸ 用户中断")
+            print("\n[中断] 用户中断")
         except Exception as e:
             print(f"\n[错误] 错误: {e}")
             import traceback
             traceback.print_exc()
-            print("\n按任意键退出...")
-            input()
         finally:
             self.disconnect()
-            print("\n按任意键退出...")
-            input()
+            if sys.stdin and sys.stdin.isatty():
+                print("\n按任意键退出...")
+                input()
     
     def disconnect(self):
         """断开连接"""

@@ -10,10 +10,10 @@ try:
     from hex_cpp import GameState as GameStateCPP
     from hex_cpp import fast_rollout
     CPP_GAME_AVAILABLE = True
-    print("✓ C++ GameState模块已加载")
+    print("[信息] C++ GameState模块已加载")
 except ImportError as e:
     CPP_GAME_AVAILABLE = False
-    print(f"✗ C++ GameState模块不可用，使用Python版本")
+    print("[警告] C++ GameState模块不可用，使用Python版本")
 
 
 class UnionFind:
@@ -179,10 +179,40 @@ class GameState:
             1: 红方胜
             2: 蓝方胜
         """
-        if self.use_cpp:
-            return self._cpp_state.winner()
-        else:
-            return self._winner_python()
+        return self._winner_by_board_connectivity()
+
+    def _winner_by_board_connectivity(self):
+        """基于棋盘连通性判断胜负（红: 上下，蓝: 左右）"""
+        board = self.board
+        size = self.size
+
+        # 红方：连接上边界(x=0)和下边界(x=size-1)
+        red_stack = [(0, y) for y in range(size) if board[0][y] == self.RED]
+        red_visited = set(red_stack)
+
+        while red_stack:
+            x, y = red_stack.pop()
+            if x == size - 1:
+                return self.RED
+            for nx, ny in self.neighbors(x, y):
+                if board[nx][ny] == self.RED and (nx, ny) not in red_visited:
+                    red_visited.add((nx, ny))
+                    red_stack.append((nx, ny))
+
+        # 蓝方：连接左边界(y=0)和右边界(y=size-1)
+        blue_stack = [(x, 0) for x in range(size) if board[x][0] == self.BLUE]
+        blue_visited = set(blue_stack)
+
+        while blue_stack:
+            x, y = blue_stack.pop()
+            if y == size - 1:
+                return self.BLUE
+            for nx, ny in self.neighbors(x, y):
+                if board[nx][ny] == self.BLUE and (nx, ny) not in blue_visited:
+                    blue_visited.add((nx, ny))
+                    blue_stack.append((nx, ny))
+
+        return 0
 
     def _winner_python(self):
         """Python版本的胜负判断"""
@@ -215,11 +245,7 @@ class GameState:
         Returns:
             胜者 (1=红方, 2=蓝方)
         """
-        if self.use_cpp:
-            # 使用C++的快速rollout
-            return fast_rollout(self._cpp_state)
-        else:
-            return self._random_playout_python()
+        return self._random_playout_python()
 
     def _random_playout_python(self):
         """Python版本的随机模拟"""
