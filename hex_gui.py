@@ -406,14 +406,14 @@ class Gui:
         row1.pack(side=TOP, fill=X, pady=2)
 
         self.load_model_btn = Button(
-            row1, text='📁 加载模型', font=('KaiTi', 10),
+            row1, text='加载模型', font=('KaiTi', 10),
             bg=self.colors['button'], fg='white',
             command=self.load_cnn_model, width=15, cursor='hand2'
         )
         self.load_model_btn.pack(side=LEFT, padx=2, pady=3)
 
         self.save_model_btn = Button(
-            row1, text='💾 保存模型', font=('KaiTi', 10),
+            row1, text='保存模型', font=('KaiTi', 10),
             bg=self.colors['button'], fg='white',
             command=self.save_cnn_model, width=15, cursor='hand2',
             state=DISABLED
@@ -425,14 +425,14 @@ class Gui:
         row2.pack(side=TOP, fill=X, pady=2)
 
         self.train_model_btn = Button(
-            row2, text='🎓 训练模型', font=('KaiTi', 10),
+            row2, text='训练模型', font=('KaiTi', 10),
             bg=self.colors['button'], fg='white',
             command=self.train_cnn_model, width=15, cursor='hand2'
         )
         self.train_model_btn.pack(side=LEFT, padx=2, pady=3)
 
         self.eval_model_btn = Button(
-            row2, text='📊 评估模型', font=('KaiTi', 10),
+            row2, text='评估模型', font=('KaiTi', 10),
             bg=self.colors['button'], fg='white',
             command=self.evaluate_cnn_model, width=15, cursor='hand2',
             state=DISABLED
@@ -587,7 +587,7 @@ class Gui:
                 # 更新状态
                 model_name = filename.split('/')[-1]
                 self.cnn_status_label.config(
-                    text=f"✓ 模型已加载\n文件: {model_name}\n棋盘大小: {self.game.size}x{self.game.size}",
+                    text=f"模型已加载\n文件: {model_name}\n棋盘大小: {self.game.size}x{self.game.size}",
                     fg='green'
                 )
 
@@ -595,11 +595,11 @@ class Gui:
                 self.save_model_btn.config(state=NORMAL)
                 self.eval_model_btn.config(state=NORMAL)
 
-                self.add_cnn_log("✓ 模型加载成功")
+                self.add_cnn_log("[完成] 模型加载成功")
                 messagebox.showinfo("成功", f"CNN模型已从 {model_name} 加载")
 
             except Exception as e:
-                self.add_cnn_log(f"✗ 加载失败: {str(e)}")
+                self.add_cnn_log(f"[错误] 加载失败: {str(e)}")
                 messagebox.showerror("错误", f"加载失败: {str(e)}")
                 import traceback
                 traceback.print_exc()
@@ -632,11 +632,11 @@ class Gui:
                     import torch
                     torch.save(self.cnn_agent.model.state_dict(), filename)
 
-                self.add_cnn_log("✓ 模型保存成功")
+                self.add_cnn_log("[完成] 模型保存成功")
                 messagebox.showinfo("成功", f"模型已保存到 {filename}")
 
             except Exception as e:
-                self.add_cnn_log(f"✗ 保存失败: {str(e)}")
+                self.add_cnn_log(f"[错误] 保存失败: {str(e)}")
                 messagebox.showerror("错误", f"保存失败: {str(e)}")
 
     def train_cnn_model(self):
@@ -672,7 +672,7 @@ class Gui:
         self.cnn_progress_var.set(0)
 
         self.add_cnn_log("=" * 60)
-        self.add_cnn_log("🚀 启动TCP分布式训练系统")
+        self.add_cnn_log("[启动] 启动TCP分布式训练系统")
         self.add_cnn_log("=" * 60)
         self.add_cnn_log(f"训练局数: {num_games}")
         self.add_cnn_log(f"客户端数: 2 (共 {num_games * 2} 局)")
@@ -691,7 +691,7 @@ class Gui:
         def start_tcp_training():
             try:
                 # 0. 清理可能占用端口的旧进程
-                self.add_cnn_log("🔍 检查端口占用...")
+                self.add_cnn_log("[检查] 检查端口占用...")
                 try:
                     import subprocess as sp
                     # 查找占用9999端口的进程
@@ -715,7 +715,7 @@ class Gui:
                                     pass
                     
                     if pids_to_kill:
-                        self.add_cnn_log(f"⚠ 发现{len(pids_to_kill)}个占用9999端口的进程，正在清理...")
+                        self.add_cnn_log(f"[警告] 发现{len(pids_to_kill)}个占用9999端口的进程，正在清理...")
                         for pid in pids_to_kill:
                             try:
                                 sp.run(['taskkill', '/F', '/PID', str(pid)], 
@@ -723,11 +723,11 @@ class Gui:
                             except:
                                 pass
                         time.sleep(1)
-                        self.add_cnn_log("✓ 端口清理完成")
+                        self.add_cnn_log("[完成] 端口清理完成")
                     else:
-                        self.add_cnn_log("✓ 端口未被占用")
+                        self.add_cnn_log("[完成] 端口未被占用")
                 except Exception as e:
-                    self.add_cnn_log(f"⚠ 端口检查失败: {e}")
+                    self.add_cnn_log(f"[警告] 端口检查失败: {e}")
                 
                 # 1. 启动训练服务器
                 self.add_cnn_log("📡 启动训练服务器...")
@@ -765,10 +765,10 @@ class Gui:
                 # 等待服务器就绪信号或超时
                 self.add_cnn_log("⏳ 等待服务器就绪...")
                 if server_ready.wait(timeout=15):  # 增加到15秒
-                    self.add_cnn_log("✓ 服务器就绪信号已接收")
+                    self.add_cnn_log("[完成] 服务器就绪信号已接收")
                     time.sleep(1)  # 额外等待1秒确保端口完全就绪
                 else:
-                    self.add_cnn_log("⚠ 未收到就绪信号，继续尝试连接...")
+                    self.add_cnn_log("[警告] 未收到就绪信号，继续尝试连接...")
                 
                 # 等待服务器启动并监听端口
                 self.add_cnn_log("⏳ 验证服务器端口...")
@@ -782,7 +782,7 @@ class Gui:
                     # 检查进程是否还在运行
                     if server_process.poll() is not None:
                         # 进程已退出
-                        self.add_cnn_log(f"✗ 服务器进程异常退出 (退出码: {server_process.returncode})")
+                        self.add_cnn_log(f"[错误] 服务器进程异常退出 (退出码: {server_process.returncode})")
                         raise Exception(f"服务器进程启动失败，退出码: {server_process.returncode}")
                     
                     # 尝试连接测试服务器是否就绪
@@ -793,7 +793,7 @@ class Gui:
                             test_sock.connect((host, 9999))
                             test_sock.close()
                             connected = True
-                            self.add_cnn_log(f"✓ 服务器端口验证成功")
+                            self.add_cnn_log(f"[完成] 服务器端口验证成功")
                             break
                         except Exception as e:
                             last_error = f"{host}:9999 - {type(e).__name__}"
@@ -802,7 +802,7 @@ class Gui:
                         break
                 
                 if not connected:
-                    self.add_cnn_log(f"✗ 无法连接到服务器端口")
+                    self.add_cnn_log(f"[错误] 无法连接到服务器端口")
                     self.add_cnn_log(f"  最后错误: {last_error}")
                     self.add_cnn_log("  提示: 可能是防火墙或端口被占用")
                     raise Exception("服务器端口连接失败")
@@ -837,7 +837,7 @@ class Gui:
                     threading.Thread(target=read_client_output, args=(client_process, i+1), daemon=True).start()
                     
                     self.tcp_processes.append(client_process)
-                    self.add_cnn_log(f"  ✓ 客户端 #{i+1} 已启动")
+                    self.add_cnn_log(f"  [完成] 客户端 #{i+1} 已启动")
                     time.sleep(0.5)
                 
                 # 3. 连接到服务器观战
@@ -846,14 +846,14 @@ class Gui:
                 
                 try:
                     self.tcp_bridge = self._create_tcp_bridge()
-                    self.add_cnn_log("✓ 观战连接已建立")
+                    self.add_cnn_log("[完成] 观战连接已建立")
                     
                     self.add_cnn_log("=" * 60)
-                    self.add_cnn_log("✅ TCP训练系统已启动！")
+                    self.add_cnn_log("[完成] TCP训练系统已启动！")
                     self.add_cnn_log("=" * 60)
-                    self.add_cnn_log("📺 当前棋盘显示实时对弈")
-                    self.add_cnn_log(f"🔄 {num_games * 2}局训练正在后台进行")
-                    self.add_cnn_log("💾 数据自动保存到 training_data/")
+                    self.add_cnn_log("当前棋盘显示实时对弈")
+                    self.add_cnn_log(f"[状态] {num_games * 2}局训练正在后台进行")
+                    self.add_cnn_log(" 数据自动保存到 training_data/")
                     self.add_cnn_log("=" * 60)
                     
                     # 更新进度标签
@@ -865,11 +865,11 @@ class Gui:
                     self._monitor_tcp_training(num_games * 2)
                     
                 except Exception as e:
-                    self.add_cnn_log(f"⚠ 观战连接失败: {e}")
+                    self.add_cnn_log(f"[警告] 观战连接失败: {e}")
                     self.add_cnn_log("训练仍在后台继续...")
                 
             except Exception as e:
-                self.add_cnn_log(f"✗ 启动失败: {e}")
+                self.add_cnn_log(f"[错误] 启动失败: {e}")
                 messagebox.showerror("错误", f"TCP训练启动失败:\n{e}")
                 self.train_model_btn.config(state=NORMAL)
                 self._stop_tcp_training()
@@ -951,7 +951,7 @@ class Gui:
             self.current_observed_game_id = game_id
             self.current_observed_move_num = 0
 
-            switch_text = f"🔄 已切换观战对局: {game_id}"
+            switch_text = f"[切换] 已切换观战对局: {game_id}"
             print(f"观战切换: client={client}, game_id={game_id}, reason={reason}")
             self.add_cnn_log(switch_text)
             self.root.title(f"海克斯棋 - TCP训练中 | 当前对局 {game_id}")
@@ -969,7 +969,7 @@ class Gui:
                 self.current_observed_game_id = game_id
                 self.current_observed_client = client
                 self.current_observed_move_num = 0
-                self.add_cnn_log(f"🆕 新对局开始: {game_id}")
+                self.add_cnn_log(f"[信息] 新对局开始: {game_id}")
                 self.canvas.delete('last_move_marker')
             
             # 添加调试日志
@@ -1029,7 +1029,7 @@ class Gui:
             winner_str = '红方' if winner == 1 else '蓝方'
             end_game_id = game_id if game_id else self.current_observed_game_id
             print(f"对局结束: game_id={end_game_id}, {winner_str}获胜 ({moves}手)")
-            self.add_cnn_log(f"🏆 对局结束 [{end_game_id}]: {winner_str}获胜 ({moves}手)")
+            self.add_cnn_log(f"[结果] 对局结束 [{end_game_id}]: {winner_str}获胜 ({moves}手)")
 
             if self.enable_winner_popup_test:
                 self.root.after(0, lambda: messagebox.showinfo(
@@ -1073,14 +1073,14 @@ class Gui:
                                      f"训练位置: {total_positions} | 批次: {batches}"
                             )
                             
-                            self.add_cnn_log(f"📊 进度: {capped_completed}/{total_games}局 | {total_positions}位置")
+                            self.add_cnn_log(f"[进度] {capped_completed}/{total_games}局 | {total_positions}位置")
                             last_completed = capped_completed
                         
                         # 训练完成
                         if completed_games >= total_games:
                             self.cnn_progress_var.set(100)
                             self.add_cnn_log("=" * 60)
-                            self.add_cnn_log("✅ 训练完成！")
+                            self.add_cnn_log("[完成] 训练完成！")
                             self.add_cnn_log(f"本次对局: {total_games}")
                             self.add_cnn_log(f"训练位置: {total_positions}")
                             self.add_cnn_log(f"数据批次: {batches}")
@@ -1126,7 +1126,7 @@ class Gui:
                     pass
         
         self.tcp_processes = []
-        self.add_cnn_log("🛑 TCP训练系统已停止")
+        self.add_cnn_log("[停止] TCP训练系统已停止")
 
     def evaluate_cnn_model(self):
         """评估CNN模型"""
@@ -1157,7 +1157,7 @@ class Gui:
                 self.add_cnn_log("评估已取消")
 
         except Exception as e:
-            self.add_cnn_log(f"✗ 评估失败: {str(e)}")
+            self.add_cnn_log(f"[错误] 评估失败: {str(e)}")
             messagebox.showerror("错误", f"评估失败: {str(e)}")
 
         self.add_cnn_log("=" * 40)

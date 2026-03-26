@@ -847,7 +847,7 @@ class CNNAgent:
         # 保存最终模型
         if save_path:
             self.save_model(save_path)
-            final_msg = f"🎉 最终推理模型已导出: {save_path}"
+            final_msg = f"[完成] 最终推理模型已导出: {save_path}"
             print(final_msg)
             logger.info(final_msg)
 

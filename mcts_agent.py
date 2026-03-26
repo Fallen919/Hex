@@ -24,7 +24,7 @@ class Node:
     def __init__(self, move, parent, state):
         self.move = move
         self.parent = parent
-        self.state = state  # ✓ 保存状态对象
+        self.state = state  # 保存状态对象
         self.children = []
         self.wins = 0
         self.visits = 0
@@ -145,8 +145,8 @@ class RAVENode(Node):
 
     def __init__(self, move, parent, state):
         super().__init__(move, parent, state)
-        self.rave_wins = {}  # ✓ 初始化为字典
-        self.rave_visits = {}  # ✓ 初始化为字典
+        self.rave_wins = {}  # 初始化为字典
+        self.rave_visits = {}  # 初始化为字典
         self.amaf_wins = {}  # All-Moves-As-First统计
         self.amaf_visits = {}
 
@@ -317,7 +317,7 @@ class MCTSAgent:
             if iterations % 100 == 0 and time.time() - start_time >= think_time:
                 break
 
-        # ✓ 保存root节点供外部访问（用于提取策略分布）
+        # 保存root节点供外部访问（用于提取策略分布）
         self.root = root
         
         best_child = root.best_child()
@@ -365,7 +365,7 @@ class RAVEAgent(MCTSAgent):
             if iterations % 100 == 0 and time.time() - start_time >= think_time:
                 break
 
-        # ✓ 保存root节点供外部访问（用于提取策略分布）
+        # 保存root节点供外部访问（用于提取策略分布）
         self.root = root
         
         best_child = root.best_child()

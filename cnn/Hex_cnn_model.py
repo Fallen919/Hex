@@ -631,7 +631,7 @@ class HexCNNTrainer:
             current_lr = self.optimizer.param_groups[0]['lr']
 
             if current_lr != previous_lr:
-                print(f"🔄 学习率已调整: {previous_lr:.6f} -> {current_lr:.6f}")
+                print(f"[调整] 学习率已调整: {previous_lr:.6f} -> {current_lr:.6f}")
                 previous_lr = current_lr
             else:
                 print(f"当前学习率: {current_lr:.6f}")
